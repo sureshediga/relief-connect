@@ -1,8 +1,6 @@
 'use client'
 
-export const dynamic = 'force-dynamic'
-
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -34,7 +32,7 @@ interface EffortWithCounts extends Effort {
   }
 }
 
-function EffortsPageContent() {
+export default function EffortsPage() {
   const searchParams = useSearchParams()
   const [efforts, setEfforts] = useState<EffortWithCounts[]>([])
   const [loading, setLoading] = useState(true)
@@ -333,13 +331,5 @@ function EffortsPageContent() {
         )}
       </div>
     </div>
-  )
-}
-
-export default function EffortsPage() {
-  return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
-      <EffortsPageContent />
-    </Suspense>
   )
 }

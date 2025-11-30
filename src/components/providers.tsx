@@ -29,7 +29,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   )
 
   return (
-    <SessionProvider refetchInterval={0} refetchOnWindowFocus={true}>
+    <SessionProvider>
       <QueryClientProvider client={queryClient}>
         {children}
         {process.env.NODE_ENV === 'development' && (
