@@ -1,6 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+export const dynamic = 'force-dynamic'
+
+import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams, useParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -96,7 +98,7 @@ const SHIFT_TIMES = [
   'Flexible'
 ]
 
-export default function VolunteerRegistrationPage() {
+function VolunteerRegistrationPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const params = useParams()
@@ -783,5 +785,13 @@ export default function VolunteerRegistrationPage() {
         </Card>
       </div>
     </div>
+  )
+}
+
+export default function VolunteerRegistrationPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
+      <VolunteerRegistrationPageContent />
+    </Suspense>
   )
 }

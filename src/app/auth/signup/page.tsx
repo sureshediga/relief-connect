@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = 'force-dynamic'
+
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Label } from "@/components/ui/label";
@@ -27,11 +29,13 @@ export default function SignUpPage() {
       const data = await res.json();
       if (!res.ok) {
         setError(data?.error ?? "Failed to sign up");
+        console.error('Signup error:', data);
       } else {
         router.push("/auth/signin?registered=1");
       }
-    } catch (err) {
-      setError("Unexpected error");
+    } catch (err: any) {
+      console.error('Signup error:', err);
+      setError(err.message || "Unexpected error. Please check the console for details.");
     } finally {
       setLoading(false);
     }
