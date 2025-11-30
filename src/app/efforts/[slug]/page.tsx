@@ -3,6 +3,8 @@ import { EffortSubnav } from '@/components/efforts/effort-subnav'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Users, Package, Heart, HelpCircle, Camera, CheckCircle, Clock } from 'lucide-react'
 
+export const dynamic = 'force-dynamic'
+
 async function getEffort(slug: string) {
   const res = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/efforts?slug=${encodeURIComponent(slug)}`);
   const data = await res.json();
