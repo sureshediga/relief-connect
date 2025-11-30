@@ -1,0 +1,615 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User accounts (shared across all efforts)
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  phone         String?
+  avatar        String?
+  image         String?
+  password      String?   // For credentials provider
+  emailVerified DateTime?
+  phoneVerified Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  accounts      Account[]
+  sessions      Session[]
+  efforts       EffortMember[]
+  helpRequests  HelpRequest[]
+  donations     Donation[]
+  volunteerHours VolunteerHour[]
+  organizedEfforts Effort[] @relation("EffortOrganizer")
+  volunteers    Volunteer[]
+  media         Media[]
+  sentInvitations EffortInvitation[] @relation("Inviter")
+
+  @@map("users")
+}
+
+// NextAuth.js required tables
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// Relief Efforts (tenants)
+model Effort {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  name        String
+  description String?
+  disasterType DisasterType
+  status      EffortStatus @default(PENDING)
+  
+  // Geographic scope
+  affectedArea Json // GeoJSON polygon or point with radius
+  
+  // Organizer information
+  organizerId String
+  organizer   User @relation("EffortOrganizer", fields: [organizerId], references: [id])
+  
+  // Organization details
+  organizationName String
+  organizationType OrganizationType
+  taxId           String?
+  website         String?
+  socialMedia     Json? // Social media links
+  
+  // Contact information
+  primaryContactName  String
+  primaryContactEmail String
+  primaryContactPhone String
+  secondaryContactName String?
+  secondaryContactEmail String?
+  secondaryContactPhone String?
+  
+  // Configuration
+  primaryLanguage String @default("en")
+  timezone        String @default("UTC")
+  branding        Json? // Logo, colors, etc.
+  
+  // Verification
+  verified        Boolean @default(false)
+  verifiedAt      DateTime?
+  verificationNotes String?
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  startedAt DateTime?
+  endedAt   DateTime?
+
+  // Relations
+  members        EffortMember[]
+  invitations    EffortInvitation[]
+  helpRequests   HelpRequest[]
+  resources      Resource[]
+  donations      Donation[]
+  volunteers     Volunteer[]
+  communications Communication[]
+  alerts         Alert[]
+  analytics      EffortAnalytics[]
+  media          Media[]
+
+  @@map("efforts")
+}
+
+// Effort membership and roles
+model EffortMember {
+  id       String      @id @default(cuid())
+  effortId String
+  userId   String
+  role     EffortRole
+  joinedAt DateTime    @default(now())
+  active   Boolean     @default(true)
+
+  effort Effort @relation(fields: [effortId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([effortId, userId])
+  @@map("effort_members")
+}
+
+// Invitations to join efforts
+model EffortInvitation {
+  id        String   @id @default(cuid())
+  effortId  String
+  email     String
+  role      EffortRole
+  invitedBy String
+  token     String   @unique
+  status    InvitationStatus @default(PENDING)
+  expiresAt DateTime
+  acceptedAt DateTime?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  effort Effort @relation(fields: [effortId], references: [id], onDelete: Cascade)
+  inviter User  @relation("Inviter", fields: [invitedBy], references: [id], onDelete: Cascade)
+
+  @@unique([effortId, email])
+  @@map("effort_invitations")
+}
+
+// Help requests from affected residents
+model HelpRequest {
+  id          String            @id @default(cuid())
+  effortId    String
+  requesterId String?
+  
+  // Request details
+  type        HelpRequestType
+  urgency     UrgencyLevel
+  title       String
+  description String
+  location    Json // GeoJSON point
+  
+  // Contact information
+  contactName  String
+  contactPhone String
+  contactEmail String?
+  canText      Boolean @default(false)
+  
+  // Status and assignment
+  status      RequestStatus @default(NEW)
+  assignedTo  String?
+  assignedAt  DateTime?
+  resolvedAt  DateTime?
+  
+  // Additional data
+  photos      String[] // URLs to uploaded photos
+  metadata    Json? // Additional structured data
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  effort    Effort @relation(fields: [effortId], references: [id], onDelete: Cascade)
+  requester User?  @relation(fields: [requesterId], references: [id])
+
+  @@map("help_requests")
+}
+
+// Resource inventory and distribution
+model Resource {
+  id          String         @id @default(cuid())
+  effortId    String
+  name        String
+  description String?
+  category    ResourceCategory
+  type        ResourceType
+  quantity    Int
+  unit        String
+  location    Json? // GeoJSON point for physical resources
+  
+  // Status and tracking
+  status      ResourceStatus @default(AVAILABLE)
+  condition   String? // New, Good, Fair, Poor
+  expiryDate  DateTime?
+  
+  // Source and distribution
+  source      String? // Donor name or purchase source
+  donorId     String?
+  distributed Int @default(0)
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  effort Effort @relation(fields: [effortId], references: [id], onDelete: Cascade)
+
+  @@map("resources")
+}
+
+// Volunteer management
+model Volunteer {
+  id          String   @id @default(cuid())
+  effortId    String
+  userId      String?
+  
+  // Volunteer information
+  name        String
+  email       String
+  phone       String
+  skills      String[] // Array of skill tags
+  availability Json? // Availability schedule
+  location    Json? // GeoJSON point
+  
+  // Status and verification
+  status      VolunteerStatus @default(REGISTERED)
+  verified    Boolean @default(false)
+  backgroundCheckPassed Boolean @default(false)
+  emergencyContact String?
+  
+  // Tracking
+  totalHours  Int @default(0)
+  lastActive  DateTime?
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  effort Effort @relation(fields: [effortId], references: [id], onDelete: Cascade)
+  user   User?  @relation(fields: [userId], references: [id])
+  hours  VolunteerHour[]
+
+  @@map("volunteers")
+}
+
+// Volunteer hours tracking
+model VolunteerHour {
+  id         String   @id @default(cuid())
+  volunteerId String
+  userId     String?
+  effortId   String
+  
+  // Hours details
+  date       DateTime
+  hours      Float
+  activity   String
+  description String?
+  
+  // Verification
+  verified   Boolean @default(false)
+  verifiedBy String?
+  verifiedAt DateTime?
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  volunteer Volunteer @relation(fields: [volunteerId], references: [id], onDelete: Cascade)
+  user      User?     @relation(fields: [userId], references: [id])
+
+  @@map("volunteer_hours")
+}
+
+// Donations and financial tracking
+model Donation {
+  id          String        @id @default(cuid())
+  effortId    String
+  donorId     String?
+  
+  // Donation details
+  type        DonationType
+  amount      Float? // For monetary donations
+  description String
+  category    String?
+  
+  // Donor information
+  donorName   String
+  donorEmail  String?
+  donorPhone  String?
+  anonymous   Boolean @default(false)
+  
+  // Status and processing
+  status      DonationStatus @default(PENDING)
+  processedAt DateTime?
+  
+  // Payment processing
+  paymentIntentId String?
+  paymentMethod   String?
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  effort Effort @relation(fields: [effortId], references: [id], onDelete: Cascade)
+  donor  User?  @relation(fields: [donorId], references: [id])
+
+  @@map("donations")
+}
+
+// Communications and alerts
+model Communication {
+  id          String   @id @default(cuid())
+  effortId    String
+  authorId    String
+  
+  // Content
+  type        CommunicationType
+  title       String
+  content     String
+  channels    String[] // SMS, Email, Push, In-app
+  
+  // Targeting
+  targetAudience Json? // Geographic, role-based, or custom targeting
+  
+  // Status
+  status      CommunicationStatus @default(DRAFT)
+  scheduledAt DateTime?
+  sentAt      DateTime?
+  
+  // Analytics
+  sentCount   Int @default(0)
+  deliveredCount Int @default(0)
+  openedCount Int @default(0)
+  clickedCount Int @default(0)
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  effort Effort @relation(fields: [effortId], references: [id], onDelete: Cascade)
+
+  @@map("communications")
+}
+
+// Emergency alerts and notifications
+model Alert {
+  id          String   @id @default(cuid())
+  effortId    String
+  
+  // Alert details
+  type        AlertType
+  severity    AlertSeverity
+  title       String
+  message     String
+  
+  // Targeting
+  targetArea  Json? // GeoJSON polygon
+  targetRoles String[] // Roles to target
+  
+  // Status
+  active      Boolean @default(true)
+  expiresAt   DateTime?
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  effort Effort @relation(fields: [effortId], references: [id], onDelete: Cascade)
+
+  @@map("alerts")
+}
+
+// Analytics and reporting
+model EffortAnalytics {
+  id          String   @id @default(cuid())
+  effortId    String
+  date        DateTime
+  
+  // Metrics
+  totalRequests     Int @default(0)
+  resolvedRequests  Int @default(0)
+  activeVolunteers  Int @default(0)
+  totalVolunteers   Int @default(0)
+  totalDonations    Float @default(0)
+  peopleHelped      Int @default(0)
+  
+  // Response times
+  avgResponseTime   Float? // in hours
+  avgResolutionTime Float? // in hours
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+
+  effort Effort @relation(fields: [effortId], references: [id], onDelete: Cascade)
+
+  @@unique([effortId, date])
+  @@map("effort_analytics")
+}
+
+// Enums
+enum DisasterType {
+  HURRICANE
+  FLOOD
+  WILDFIRE
+  EARTHQUAKE
+  TORNADO
+  DROUGHT
+  PANDEMIC
+  OTHER
+}
+
+enum EffortStatus {
+  PENDING
+  ACTIVE
+  COMPLETED
+  SUSPENDED
+  CANCELLED
+}
+
+enum OrganizationType {
+  NONPROFIT
+  GOVERNMENT
+  FAITH_BASED
+  COMMUNITY_GROUP
+  INDIVIDUAL
+  CORPORATE
+  OTHER
+}
+
+enum EffortRole {
+  ORGANIZER
+  COORDINATOR
+  VOLUNTEER
+  VIEWER
+}
+
+enum HelpRequestType {
+  SHELTER
+  FOOD
+  WATER
+  MEDICAL
+  EVACUATION
+  SUPPLIES
+  TRANSPORTATION
+  COMMUNICATION
+  OTHER
+}
+
+enum UrgencyLevel {
+  CRITICAL
+  URGENT
+  IMPORTANT
+  ROUTINE
+}
+
+enum RequestStatus {
+  NEW
+  ASSIGNED
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+  CANCELLED
+}
+
+enum ResourceCategory {
+  FOOD
+  WATER
+  SHELTER
+  MEDICAL
+  CLOTHING
+  HYGIENE
+  TOOLS
+  EQUIPMENT
+  TRANSPORTATION
+  OTHER
+}
+
+enum ResourceType {
+  PHYSICAL
+  SERVICE
+  FINANCIAL
+  INFORMATION
+}
+
+enum ResourceStatus {
+  AVAILABLE
+  RESERVED
+  DISTRIBUTED
+  EXPIRED
+  DAMAGED
+}
+
+enum VolunteerStatus {
+  REGISTERED
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  REMOVED
+}
+
+enum DonationType {
+  MONETARY
+  PHYSICAL
+  SERVICE
+  TIME
+}
+
+enum DonationStatus {
+  PENDING
+  PROCESSED
+  FAILED
+  REFUNDED
+}
+
+enum CommunicationType {
+  UPDATE
+  ALERT
+  REQUEST
+  THANK_YOU
+  REMINDER
+  NEWSLETTER
+}
+
+enum CommunicationStatus {
+  DRAFT
+  SCHEDULED
+  SENDING
+  SENT
+  FAILED
+}
+
+enum AlertType {
+  EMERGENCY
+  SAFETY
+  WEATHER
+  RESOURCE
+  VOLUNTEER
+  GENERAL
+}
+
+enum AlertSeverity {
+  EMERGENCY
+  URGENT
+  IMPORTANT
+  INFO
+}
+
+model Media {
+  id        String   @id @default(cuid())
+  effortId String
+  userId   String?
+  url      String
+  type     MediaType
+  caption  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  effort   Effort @relation(fields: [effortId], references: [id], onDelete: Cascade)
+  user     User?   @relation(fields: [userId], references: [id])
+  
+  @@map("media")
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  EXPIRED
+}
