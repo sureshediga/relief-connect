@@ -1,7 +1,5 @@
 "use client";
 
-export const dynamic = 'force-dynamic'
-
 import { useParams } from "next/navigation";
 import { EffortSubnav } from "@/components/efforts/effort-subnav";
 import { MediaGallery } from "@/components/efforts/media-gallery";
