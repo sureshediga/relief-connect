@@ -51,3 +51,14 @@ Thumbs.db
 # Netlify
 .netlify
 
+# Exe and installers
+*.exe
+*.dmg
+*.pkg
+*.msi
+
+# Sensitive files
+client_secret_*.json
+*.secret
+*.key
+*.pem

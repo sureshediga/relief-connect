@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useSession, signIn, signOut } from 'next-auth/react'
@@ -19,15 +19,71 @@ import { Breadcrumbs } from '@/components/layout/breadcrumbs'
 
 export function Header() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [mounted, setMounted] = useState(false)
   const { data: session, status } = useSession()
   const pathname = usePathname()
   const router = useRouter()
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const navigation = [
     { name: 'Find Help', href: '/efforts', icon: MapPin },
     { name: 'Volunteer', href: '/volunteer', icon: Users },
     { name: 'Donate', href: '/donate', icon: Heart },
   ]
+
+  // Don't render session-dependent content during SSR
+  if (!mounted) {
+    return (
+      <header className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex-shrink-0">
+              <div className="flex items-center space-x-3">
+                {pathname !== '/' && (
+                  <button
+                    type="button"
+                    aria-label="Go back"
+                    onClick={() => router.back()}
+                    className="p-2 rounded-md hover:bg-gray-100"
+                  >
+                    <ArrowLeft className="w-5 h-5 text-gray-700" />
+                  </button>
+                )}
+                <Link href="/" className="flex items-center space-x-2">
+                  <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+                    <Heart className="w-5 h-5 text-white" />
+                  </div>
+                  <span className="text-xl font-bold text-gray-900">
+                    Relief Connect
+                  </span>
+                </Link>
+              </div>
+            </div>
+            <nav className="hidden md:flex space-x-8">
+              {navigation.map((item) => (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  className="flex items-center space-x-1 text-gray-600 hover:text-primary transition-colors"
+                >
+                  <item.icon className="w-4 h-4" />
+                  <span>{item.name}</span>
+                </Link>
+              ))}
+            </nav>
+            <div className="hidden md:flex items-center space-x-4">
+              <Button asChild variant="outline">
+                <Link href="/auth/signin">Sign In</Link>
+              </Button>
+            </div>
+          </div>
+        </div>
+      </header>
+    )
+  }
 
   return (
     <header className="bg-white shadow-sm border-b">

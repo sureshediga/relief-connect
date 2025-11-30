@@ -36,7 +36,7 @@ export async function POST(request: NextRequest, { params }: { params: { slug: s
   const boundary = request.headers.get('content-type')?.split('boundary=')[1]
   if (!boundary) return NextResponse.json({ success: false, error: 'Invalid form' }, { status: 400 })
   const buffer = Buffer.from(await request.arrayBuffer())
-  const delimiter = Buffer.from(`--${boundary}`)
+  const delimiter = `--${boundary}`
   const parts = buffer.toString().split(delimiter)
   const files: { name: string; content: Buffer }[] = []
   let caption: string | undefined = undefined
