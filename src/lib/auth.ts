@@ -8,19 +8,10 @@ import { User } from '@/types'
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(db) as any,
-  secret: process.env.NEXTAUTH_SECRET,
-  debug: true, // Enable debug mode to see what's happening
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-      authorization: {
-        params: {
-          prompt: "consent",
-          access_type: "offline",
-          response_type: "code"
-        }
-      }
     }),
     CredentialsProvider({
       name: 'credentials',
@@ -65,96 +56,19 @@ export const authOptions: NextAuthOptions = {
   ],
   session: {
     strategy: 'jwt',
-    maxAge: 30 * 24 * 60 * 60, // 30 days
-  },
-  cookies: {
-    sessionToken: {
-      name: `${process.env.NODE_ENV === 'production' ? '__Secure-' : ''}next-auth.session-token`,
-      options: {
-        httpOnly: true,
-        sameSite: 'lax',
-        path: '/',
-        secure: process.env.NODE_ENV === 'production',
-      },
-    },
   },
   callbacks: {
-    async signIn({ user, account, profile }) {
-      // Allow sign in
-      return true
-    },
-    async jwt({ token, user, account, profile }) {
-      // Log for debugging
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[JWT Callback]', { 
-          hasUser: !!user, 
-          hasAccount: !!account, 
-          hasProfile: !!profile,
-          tokenId: token.id,
-          userEmail: user?.email || (profile as any)?.email
-        })
-      }
-
-      // Initial sign in - user object is available from adapter
+    async jwt({ token, user }) {
       if (user) {
         token.id = user.id
-        token.email = user.email || (profile as any)?.email
-        token.name = user.name || (profile as any)?.name
-        token.picture = user.image || (profile as any)?.picture
       }
-      
-      // If account exists but user doesn't (edge case with PrismaAdapter), fetch from database
-      if (account && !user) {
-        const email = (profile as any)?.email || token.email
-        if (email) {
-          try {
-            const dbUser = await db.user.findUnique({
-              where: { email }
-            })
-            if (dbUser) {
-              token.id = dbUser.id
-              token.email = dbUser.email
-              token.name = dbUser.name
-              token.picture = dbUser.image || dbUser.avatar
-            }
-          } catch (err) {
-            console.error('[JWT Callback] Error fetching user:', err)
-          }
-        }
-        token.accessToken = account.access_token
-        token.provider = account.provider
-      } else if (account) {
-        token.accessToken = account.access_token
-        token.provider = account.provider
-      }
-      
       return token
     },
     async session({ session, token }) {
-      // Log for debugging
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[Session Callback]', { 
-          hasToken: !!token,
-          tokenId: token.id,
-          hasSessionUser: !!session.user
-        })
-      }
-
-      // Send properties to the client
-      if (token && session.user) {
-        if (token.id) session.user.id = token.id as string
-        if (token.email) session.user.email = token.email as string
-        if (token.name) session.user.name = token.name as string
-        if (token.picture) session.user.image = token.picture as string
+      if (token) {
+        session.user.id = token.id as string
       }
       return session
-    },
-    async redirect({ url, baseUrl }) {
-      // Allows relative callback URLs
-      if (url.startsWith("/")) return `${baseUrl}${url}`
-      // Allows callback URLs on the same origin
-      if (new URL(url).origin === baseUrl) return url
-      return baseUrl
     },
   },
   pages: {
