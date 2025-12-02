@@ -28,8 +28,12 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({ success: true }, { status: 201 });
-  } catch (err) {
-    return NextResponse.json({ error: "Unexpected error" }, { status: 500 });
+  } catch (err: any) {
+    console.error('Signup error:', err);
+    return NextResponse.json({ 
+      error: err.message || "Unexpected error",
+      details: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    }, { status: 500 });
   }
 }
 

@@ -1,5 +1,7 @@
 'use client'
 
+export const dynamic = 'force-dynamic'
+
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -60,65 +62,34 @@ export default function SecurityDashboardPage() {
   const fetchSecurityData = async () => {
     try {
       setLoading(true)
-      // In production, this would fetch from your security monitoring service
-      const mockEvents: SecurityEvent[] = [
-        {
-          id: '1',
-          type: 'failed_login',
-          severity: 'high',
-          message: 'Multiple failed login attempts detected',
-          timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-          ip: '192.168.1.100',
-          userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          userId: 'user123'
-        },
-        {
-          id: '2',
-          type: 'data_access',
-          severity: 'low',
-          message: 'User accessed volunteer data',
-          timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-          ip: '192.168.1.101',
-          userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-          userId: 'user456'
-        },
-        {
-          id: '3',
-          type: 'suspicious',
-          severity: 'critical',
-          message: 'Unusual data access pattern detected',
-          timestamp: new Date(Date.now() - 1000 * 60 * 60 * 4).toISOString(),
-          ip: '192.168.1.102',
-          userAgent: 'curl/7.68.0',
-          userId: 'user789'
-        },
-        {
-          id: '4',
-          type: 'csp_violation',
-          severity: 'medium',
-          message: 'Content Security Policy violation detected',
-          timestamp: new Date(Date.now() - 1000 * 60 * 60 * 6).toISOString(),
-          ip: '192.168.1.103',
-          userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36'
-        }
-      ]
-
-      const mockMetrics: SecurityMetrics = {
-        totalEvents: 156,
-        criticalEvents: 3,
-        highEvents: 12,
-        mediumEvents: 45,
-        lowEvents: 96,
-        failedLogins: 8,
-        suspiciousActivity: 2,
-        dataAccessEvents: 89,
-        cspViolations: 5
-      }
-
-      setEvents(mockEvents)
-      setMetrics(mockMetrics)
+      // TODO: In production, integrate with a security monitoring service
+      // For now, return empty data as security logging is not yet implemented
+      setEvents([])
+      setMetrics({
+        totalEvents: 0,
+        criticalEvents: 0,
+        highEvents: 0,
+        mediumEvents: 0,
+        lowEvents: 0,
+        failedLogins: 0,
+        suspiciousActivity: 0,
+        dataAccessEvents: 0,
+        cspViolations: 0
+      })
     } catch (error) {
       console.error('Failed to fetch security data:', error)
+      setEvents([])
+      setMetrics({
+        totalEvents: 0,
+        criticalEvents: 0,
+        highEvents: 0,
+        mediumEvents: 0,
+        lowEvents: 0,
+        failedLogins: 0,
+        suspiciousActivity: 0,
+        dataAccessEvents: 0,
+        cspViolations: 0
+      })
     } finally {
       setLoading(false)
     }

@@ -1,5 +1,7 @@
 'use client'
 
+export const dynamic = 'force-dynamic'
+
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
@@ -44,11 +46,22 @@ interface RecentEffort {
   }
 }
 
+interface ActivityItem {
+  id: string
+  type: string
+  message: string
+  timestamp: string
+  effortId?: string
+  effortName?: string
+  color: string
+}
+
 export default function DashboardPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [recentEfforts, setRecentEfforts] = useState<RecentEffort[]>([])
+  const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -72,15 +85,31 @@ export default function DashboardPage() {
         setRecentEfforts(effortsResult.data.slice(0, 5))
       }
 
-      // Mock stats for now - in production, this would come from an API
-      setStats({
-        totalEfforts: 3,
-        activeEfforts: 2,
-        totalVolunteers: 47,
-        totalRequests: 156,
-        peopleHelped: 89,
-        avgResponseTime: 2.3
-      })
+      // Fetch real statistics
+      const statsResponse = await fetch('/api/stats')
+      const statsResult = await statsResponse.json()
+
+      if (statsResult.success && statsResult.data.user) {
+        setStats(statsResult.data.user)
+      } else if (statsResult.success && statsResult.data.platform) {
+        // Fallback to platform stats if user stats not available
+        setStats({
+          totalEfforts: statsResult.data.platform.totalEfforts,
+          activeEfforts: statsResult.data.platform.activeEfforts,
+          totalVolunteers: statsResult.data.platform.totalVolunteers,
+          totalRequests: statsResult.data.platform.totalHelpRequests,
+          peopleHelped: statsResult.data.platform.peopleHelped,
+          avgResponseTime: statsResult.data.platform.avgResponseTime
+        })
+      }
+
+      // Fetch recent activity
+      const activityResponse = await fetch('/api/activity?limit=5')
+      const activityResult = await activityResponse.json()
+
+      if (activityResult.success) {
+        setRecentActivity(activityResult.data)
+      }
     } catch (error) {
       console.error('Error fetching dashboard data:', error)
     } finally {
@@ -316,35 +345,27 @@ export default function DashboardPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  <div className="flex items-start space-x-3">
-                    <div className="w-2 h-2 bg-green-500 rounded-full mt-2"></div>
-                    <div className="flex-1">
-                      <p className="text-sm text-gray-900">
-                        New volunteer joined Hurricane Relief Effort
-                      </p>
-                      <p className="text-xs text-gray-500">2 hours ago</p>
-                    </div>
+                {recentActivity.length === 0 ? (
+                  <div className="text-center py-4 text-sm text-gray-500">
+                    No recent activity
                   </div>
-                  <div className="flex items-start space-x-3">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
-                    <div className="flex-1">
-                      <p className="text-sm text-gray-900">
-                        Help request resolved in Flood Response
-                      </p>
-                      <p className="text-xs text-gray-500">4 hours ago</p>
-                    </div>
+                ) : (
+                  <div className="space-y-4">
+                    {recentActivity.map((activity) => (
+                      <div key={activity.id} className="flex items-start space-x-3">
+                        <div className={`w-2 h-2 bg-${activity.color}-500 rounded-full mt-2`}></div>
+                        <div className="flex-1">
+                          <p className="text-sm text-gray-900">
+                            {activity.message}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {formatTimeAgo(new Date(activity.timestamp))}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div className="flex items-start space-x-3">
-                    <div className="w-2 h-2 bg-yellow-500 rounded-full mt-2"></div>
-                    <div className="flex-1">
-                      <p className="text-sm text-gray-900">
-                        New donation received for Wildfire Relief
-                      </p>
-                      <p className="text-xs text-gray-500">6 hours ago</p>
-                    </div>
-                  </div>
-                </div>
+                )}
               </CardContent>
             </Card>
           </div>

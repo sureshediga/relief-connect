@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -53,12 +53,42 @@ export function CTASection() {
     }
   ]
 
-  const stats = [
-    { label: 'Relief Efforts', value: '247', color: 'text-emergency' },
-    { label: 'Volunteers', value: '15.4K', color: 'text-urgent' },
-    { label: 'People Helped', value: '89.2K', color: 'text-success' },
-    { label: 'Countries', value: '12', color: 'text-info' }
-  ]
+  const [stats, setStats] = useState([
+    { label: 'Relief Efforts', value: '0', color: 'text-emergency' },
+    { label: 'Volunteers', value: '0', color: 'text-urgent' },
+    { label: 'People Helped', value: '0', color: 'text-success' },
+    { label: 'Countries', value: '0', color: 'text-info' }
+  ])
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const response = await fetch('/api/stats')
+        const result = await response.json()
+
+        if (result.success && result.data.platform) {
+          const platform = result.data.platform
+          const formatValue = (val: number) => {
+            if (val >= 1000) {
+              return (val / 1000).toFixed(1) + 'K'
+            }
+            return val.toString()
+          }
+
+          setStats([
+            { label: 'Relief Efforts', value: formatValue(platform.activeEfforts || 0), color: 'text-emergency' },
+            { label: 'Volunteers', value: formatValue(platform.totalVolunteers || 0), color: 'text-urgent' },
+            { label: 'People Helped', value: formatValue(platform.peopleHelped || 0), color: 'text-success' },
+            { label: 'Countries', value: (platform.countriesServed || 1).toString(), color: 'text-info' }
+          ])
+        }
+      } catch (error) {
+        console.error('Error fetching stats:', error)
+      }
+    }
+
+    fetchStats()
+  }, [])
 
   return (
     <section className="py-20 bg-gradient-to-br from-gray-900 via-blue-900 to-indigo-900 text-white">

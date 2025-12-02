@@ -64,39 +64,60 @@ export function StatsSection() {
     }
   ])
 
-  // Animate numbers on mount
+  // Fetch real statistics
   useEffect(() => {
-    const targetValues = [247, 15420, 89234, 2.3, 89, 12]
-    
-    const animateValue = (index: number, start: number, end: number, duration: number) => {
-      const startTime = performance.now()
-      
-      const updateValue = (currentTime: number) => {
-        const elapsed = currentTime - startTime
-        const progress = Math.min(elapsed / duration, 1)
-        
-        // Easing function for smooth animation
-        const easeOutCubic = 1 - Math.pow(1 - progress, 3)
-        const currentValue = start + (end - start) * easeOutCubic
-        
-        setStats(prev => prev.map((stat, i) => 
-          i === index ? { ...stat, value: currentValue } : stat
-        ))
-        
-        if (progress < 1) {
-          requestAnimationFrame(updateValue)
+    const fetchStats = async () => {
+      try {
+        const response = await fetch('/api/stats')
+        const result = await response.json()
+
+        if (result.success && result.data.platform) {
+          const platform = result.data.platform
+          const targetValues = [
+            platform.activeEfforts || 0,
+            platform.totalVolunteers || 0,
+            platform.peopleHelped || 0,
+            platform.avgResponseTime || 0,
+            platform.verifiedOrganizations || 0,
+            platform.countriesServed || 1
+          ]
+
+          const animateValue = (index: number, start: number, end: number, duration: number) => {
+            const startTime = performance.now()
+            
+            const updateValue = (currentTime: number) => {
+              const elapsed = currentTime - startTime
+              const progress = Math.min(elapsed / duration, 1)
+              
+              // Easing function for smooth animation
+              const easeOutCubic = 1 - Math.pow(1 - progress, 3)
+              const currentValue = start + (end - start) * easeOutCubic
+              
+              setStats(prev => prev.map((stat, i) => 
+                i === index ? { ...stat, value: currentValue } : stat
+              ))
+              
+              if (progress < 1) {
+                requestAnimationFrame(updateValue)
+              }
+            }
+            
+            requestAnimationFrame(updateValue)
+          }
+
+          // Start animations with slight delays
+          targetValues.forEach((target, index) => {
+            setTimeout(() => {
+              animateValue(index, 0, target, 2000)
+            }, index * 200)
+          })
         }
+      } catch (error) {
+        console.error('Error fetching stats:', error)
       }
-      
-      requestAnimationFrame(updateValue)
     }
 
-    // Start animations with slight delays
-    targetValues.forEach((target, index) => {
-      setTimeout(() => {
-        animateValue(index, 0, target, 2000)
-      }, index * 200)
-    })
+    fetchStats()
   }, [])
 
   const formatValue = (value: number, id: string): string => {
