@@ -74,10 +74,11 @@ export async function GET(request: NextRequest) {
     })
 
     recentVolunteers.forEach(volunteer => {
+      const volunteerName = volunteer.user?.name || 'A volunteer'
       activities.push({
         id: `volunteer-${volunteer.id}`,
         type: 'volunteer_joined',
-        message: `New volunteer ${volunteer.user.name || 'joined'} joined ${volunteer.effort.name}`,
+        message: `New volunteer ${volunteerName} joined ${volunteer.effort.name}`,
         timestamp: volunteer.createdAt.toISOString(),
         effortId: volunteer.effortId,
         effortName: volunteer.effort.name,
