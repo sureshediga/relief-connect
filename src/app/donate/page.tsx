@@ -178,14 +178,14 @@ function DonatePageContent() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredEfforts.map((effort) => {
-              const DisasterIcon = getDisasterTypeIcon(effort.disasterType)
+              const disasterIcon = getDisasterTypeIcon(effort.disasterType)
               
               return (
                 <Card key={effort.id} className="hover:shadow-lg transition-shadow">
                   <CardHeader>
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex items-center space-x-2">
-                        <DisasterIcon className="w-5 h-5 text-primary" />
+                        <span className="w-5 h-5 text-primary flex items-center justify-center">{disasterIcon}</span>
                         <Badge
                           className={cn(
                             effort.status === 'ACTIVE' ? 'bg-green-100 text-green-800' :
