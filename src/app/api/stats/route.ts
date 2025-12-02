@@ -34,9 +34,7 @@ export async function GET(request: NextRequest) {
     // Calculate average response time (time from request creation to assignment)
     const helpRequestsWithTimes = await db.helpRequest.findMany({
       where: {
-        status: { in: ['ASSIGNED', 'IN_PROGRESS', 'RESOLVED'] },
-        assignedAt: { not: null },
-        createdAt: { not: null }
+        status: { in: ['ASSIGNED', 'IN_PROGRESS', 'RESOLVED'] }
       },
       select: {
         createdAt: true,
