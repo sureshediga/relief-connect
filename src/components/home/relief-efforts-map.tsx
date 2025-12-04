@@ -494,7 +494,6 @@ export function ReliefEffortsMap({ className }: ReliefEffortsMapProps) {
             >
               <Popup
                 closeButton={true}
-                onClose={() => setSelectedEffort(null)}
               >
                 <div className="p-2 max-w-xs">
                   <h3 className="font-semibold text-lg mb-1">{effort.name}</h3>
