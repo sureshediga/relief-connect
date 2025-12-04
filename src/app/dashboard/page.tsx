@@ -63,6 +63,7 @@ export default function DashboardPage() {
   const [recentEfforts, setRecentEfforts] = useState<RecentEffort[]>([])
   const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [pendingEffortsCount, setPendingEffortsCount] = useState<number | null>(null)
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -106,6 +107,22 @@ export default function DashboardPage() {
       // Fetch recent activity
       const activityResponse = await fetch('/api/activity?limit=5')
       const activityResult = await activityResponse.json()
+
+      // If user is admin, fetch pending efforts count
+      if (session?.user?.isAdmin) {
+        try {
+          const pendingResponse = await fetch('/api/efforts?status=PENDING&limit=1')
+          const pendingResult = await pendingResponse.json()
+          if (pendingResult.success) {
+            // Get total count - we need to fetch all to count
+            const allPendingResponse = await fetch('/api/efforts?status=PENDING&limit=100')
+            const allPendingResult = await allPendingResponse.json()
+            setPendingEffortsCount(allPendingResult.success ? allPendingResult.data?.length || 0 : 0)
+          }
+        } catch (err) {
+          console.error('Error fetching pending efforts count:', err)
+        }
+      }
 
       if (activityResult.success) {
         setRecentActivity(activityResult.data)
@@ -151,6 +168,33 @@ export default function DashboardPage() {
             Here's what's happening with your relief efforts
           </p>
         </div>
+
+        {/* Admin Alert Banner */}
+        {session?.user?.isAdmin && pendingEffortsCount !== null && pendingEffortsCount > 0 && (
+          <Card className="mb-8 border-yellow-200 bg-yellow-50">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <Shield className="w-6 h-6 text-yellow-600" />
+                  <div>
+                    <h3 className="font-semibold text-yellow-900">
+                      {pendingEffortsCount} Pending Relief Effort{pendingEffortsCount !== 1 ? 's' : ''} Awaiting Approval
+                    </h3>
+                    <p className="text-sm text-yellow-700">
+                      Review and approve pending relief efforts to make them active
+                    </p>
+                  </div>
+                </div>
+                <Button asChild className="bg-yellow-600 hover:bg-yellow-700 text-white">
+                  <Link href="/admin/efforts">
+                    <Shield className="w-4 h-4 mr-2" />
+                    Review Now
+                  </Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Stats Cards */}
         {stats && (

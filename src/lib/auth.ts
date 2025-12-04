@@ -101,6 +101,10 @@ export const authOptions: NextAuthOptions = {
         token.email = user.email || (profile as any)?.email
         token.name = user.name || (profile as any)?.name
         token.picture = user.image || (profile as any)?.picture
+        // Add admin status
+        if (token.email) {
+          token.isAdmin = isAdmin(token.email as string)
+        }
       }
       
       // If account exists but user doesn't (edge case with PrismaAdapter), fetch from database
@@ -116,6 +120,10 @@ export const authOptions: NextAuthOptions = {
               token.email = dbUser.email
               token.name = dbUser.name
               token.picture = dbUser.image || dbUser.avatar
+              // Add admin status
+              if (dbUser.email) {
+                token.isAdmin = isAdmin(dbUser.email)
+              }
             }
           } catch (err) {
             console.error('[JWT Callback] Error fetching user:', err)
@@ -146,6 +154,10 @@ export const authOptions: NextAuthOptions = {
         if (token.email) session.user.email = token.email as string
         if (token.name) session.user.name = token.name as string
         if (token.picture) session.user.image = token.picture as string
+        // Add admin status
+        if (token.email) {
+          session.user.isAdmin = isAdmin(token.email as string)
+        }
       }
       return session
     },
@@ -208,4 +220,23 @@ export async function canUserAccessEffort(
   
   return roleHierarchy[role as keyof typeof roleHierarchy] >= 
          roleHierarchy[requiredRole as keyof typeof roleHierarchy]
+}
+
+// Helper function to check if user is admin
+export function isAdmin(email: string | null | undefined): boolean {
+  if (!email) return false
+  
+  const adminEmails = process.env.ADMIN_EMAILS?.split(',').map(e => e.trim().toLowerCase()) || []
+  return adminEmails.includes(email.toLowerCase())
+}
+
+// Helper function to check if user is admin (async version for database lookup)
+export async function isUserAdmin(userId: string): Promise<boolean> {
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    select: { email: true }
+  })
+  
+  if (!user?.email) return false
+  return isAdmin(user.email)
 }

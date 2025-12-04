@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
-import { AlertTriangle, MapPin, Users, Settings, CheckCircle, ArrowRight, ArrowLeft } from 'lucide-react'
+import { AlertTriangle, MapPin, Users, Settings, CheckCircle, ArrowRight, ArrowLeft, Search, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { DisasterType, OrganizationType } from '@/types'
 
@@ -29,6 +29,8 @@ interface FormData {
     coordinates: number[][][]
   } | null
   primaryCity: string
+  locationAddress: string
+  locationCoordinates: [number, number] | null // [lat, lng]
   radius: number
 
   // Step 3: Organizer Information
@@ -63,6 +65,8 @@ const initialFormData: FormData = {
   description: '',
   affectedArea: null,
   primaryCity: '',
+  locationAddress: '',
+  locationCoordinates: null,
   radius: 0,
   organizationName: '',
   organizationType: OrganizationType.INDIVIDUAL,
@@ -100,6 +104,8 @@ export default function CreateEffortPage() {
   const [formData, setFormData] = useState<FormData>(initialFormData)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [apiError, setApiError] = useState<string | null>(null)
+  const [isGeocoding, setIsGeocoding] = useState(false)
+  const [geocodeError, setGeocodeError] = useState<string | null>(null)
 
   const isStepValid = (step: number) => {
     if (step === 1) {
@@ -111,7 +117,7 @@ export default function CreateEffortPage() {
       )
     }
     if (step === 2) {
-      return formData.primaryCity.trim().length > 0
+      return formData.locationAddress.trim().length > 0 && formData.locationCoordinates !== null
     }
     if (step === 3) {
       return (
@@ -130,13 +136,31 @@ export default function CreateEffortPage() {
   }
 
   // Redirect if not authenticated
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push('/auth/signin?callbackUrl=/efforts/create')
+    }
+  }, [status, router])
+
   if (status === 'loading') {
-    return <div>Loading...</div>
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    )
   }
 
   if (status === 'unauthenticated') {
-    router.push('/auth/signin?callbackUrl=/efforts/create')
-    return null
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-gray-600">Redirecting to sign in...</p>
+        </div>
+      </div>
+    )
   }
 
   const updateFormData = (updates: Partial<FormData>) => {
@@ -155,28 +179,113 @@ export default function CreateEffortPage() {
     }
   }
 
+  // Helper function to create polygon from coordinates and radius
+  const createPolygonFromCoordinates = (lat: number, lng: number, radiusKm: number) => {
+    const latOffset = radiusKm / 111.0 // Rough conversion: 1 degree lat ≈ 111 km
+    const lngOffset = radiusKm / (111.0 * Math.cos(lat * Math.PI / 180))
+    
+    return {
+      type: 'Polygon' as const,
+      coordinates: [[
+        [lng - lngOffset, lat - latOffset], // Bottom-left
+        [lng + lngOffset, lat - latOffset], // Bottom-right
+        [lng + lngOffset, lat + latOffset], // Top-right
+        [lng - lngOffset, lat + latOffset], // Top-left
+        [lng - lngOffset, lat - latOffset], // Close polygon
+      ]]
+    }
+  }
+
+  // Geocode location address to get coordinates
+  const geocodeLocation = async (address: string) => {
+    if (!address.trim()) {
+      setGeocodeError(null)
+      return
+    }
+
+    setIsGeocoding(true)
+    setGeocodeError(null)
+
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&addressdetails=1`
+      )
+      const data = await response.json()
+
+      if (data && data.length > 0) {
+        const lat = parseFloat(data[0].lat)
+        const lng = parseFloat(data[0].lon)
+        const coordinates: [number, number] = [lat, lng]
+
+        // Use current radius or default to 5km
+        const radius = formData.radius > 0 ? formData.radius : 5
+        const polygon = createPolygonFromCoordinates(lat, lng, radius)
+
+        updateFormData({
+          locationCoordinates: coordinates,
+          affectedArea: polygon,
+          primaryCity: data[0].display_name.split(',')[0] || address, // Extract city name
+          radius: radius, // Ensure radius is set
+        })
+
+        setGeocodeError(null)
+      } else {
+        setGeocodeError('Location not found. Please try a different address or be more specific.')
+        updateFormData({
+          locationCoordinates: null,
+          affectedArea: null,
+        })
+      }
+    } catch (err) {
+      console.error('Error geocoding location:', err)
+      setGeocodeError('Error finding location. Please try again.')
+      updateFormData({
+        locationCoordinates: null,
+        affectedArea: null,
+      })
+    } finally {
+      setIsGeocoding(false)
+    }
+  }
+
+  // Handle location address change with debounce
+  const handleLocationChange = (address: string) => {
+    updateFormData({ locationAddress: address })
+    // Clear coordinates if address is cleared
+    if (!address.trim()) {
+      updateFormData({
+        locationCoordinates: null,
+        affectedArea: null,
+      })
+      setGeocodeError(null)
+    }
+  }
+
+  // Handle location search
+  const handleLocationSearch = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (formData.locationAddress.trim()) {
+      await geocodeLocation(formData.locationAddress)
+    }
+  }
+
   const handleSubmit = async () => {
     setIsSubmitting(true)
     setApiError(null)
     try {
+      // Ensure we have valid coordinates
+      if (!formData.affectedArea || !formData.locationCoordinates) {
+        setApiError('Please select a valid location for the relief effort.')
+        setIsSubmitting(false)
+        return
+      }
+
       // Shape payload to match API expectations
       const payload = {
         name: formData.disasterName || `${formData.organizationName} Relief`,
         description: formData.description || undefined,
         disasterType: formData.disasterType,
-        affectedArea:
-          formData.affectedArea ?? {
-            type: 'Polygon' as const,
-            coordinates: [
-              [
-                [0, 0],
-                [0.01, 0],
-                [0.01, 0.01],
-                [0, 0.01],
-                [0, 0],
-              ],
-            ],
-          },
+        affectedArea: formData.affectedArea,
         organizationName: formData.organizationName,
         organizationType: formData.organizationType,
         primaryContactName: formData.primaryContactName,
@@ -377,7 +486,7 @@ export default function CreateEffortPage() {
                         Geographic Scope
                       </h3>
                       <p className="text-sm text-blue-700 mt-1">
-                        Define the area affected by the disaster. This helps volunteers and resources find your effort.
+                        Enter the location where the relief effort is needed. This helps volunteers and resources find your effort on the map.
                       </p>
                     </div>
                   </div>
@@ -385,37 +494,119 @@ export default function CreateEffortPage() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Primary City/Region *
+                    Location Address *
                   </label>
-                  <Input
-                    value={formData.primaryCity}
-                    onChange={(e) => updateFormData({ primaryCity: e.target.value })}
-                    placeholder="e.g., Mumbai, Maharashtra, IN"
-                    className="text-lg"
-                  />
+                  <form onSubmit={handleLocationSearch} className="space-y-2">
+                    <div className="flex gap-2">
+                      <div className="flex-1 relative">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                        <Input
+                          value={formData.locationAddress}
+                          onChange={(e) => handleLocationChange(e.target.value)}
+                          placeholder="e.g., Miami, FL, USA or 33101 or Miami Beach"
+                          className="text-lg pl-10 pr-4"
+                        />
+                      </div>
+                      <Button
+                        type="submit"
+                        disabled={isGeocoding || !formData.locationAddress.trim()}
+                        className="px-6"
+                      >
+                        {isGeocoding ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Searching...
+                          </>
+                        ) : (
+                          <>
+                            <Search className="w-4 h-4 mr-2" />
+                            Find Location
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                    {geocodeError && (
+                      <p className="text-sm text-red-600 flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4" />
+                        {geocodeError}
+                      </p>
+                    )}
+                    {formData.locationCoordinates && (
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                        <p className="text-sm text-green-800 flex items-center gap-2">
+                          <CheckCircle className="w-4 h-4" />
+                          Location found: {formData.primaryCity || formData.locationAddress}
+                        </p>
+                        <p className="text-xs text-green-700 mt-1">
+                          Coordinates: {formData.locationCoordinates[0].toFixed(4)}, {formData.locationCoordinates[1].toFixed(4)}
+                        </p>
+                      </div>
+                    )}
+                  </form>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Affected Area Radius (km)
+                    Affected Area Radius (km) *
                   </label>
                   <Input
                     type="number"
-                    value={formData.radius}
-                    onChange={(e) => updateFormData({ radius: parseInt(e.target.value) || 0 })}
-                    placeholder="e.g., 50"
-                    min="0"
+                    value={formData.radius || 5}
+                    onChange={(e) => {
+                      const newRadius = parseInt(e.target.value) || 5
+                      updateFormData({ radius: newRadius })
+                      // Update polygon if location is already set
+                      if (formData.locationCoordinates) {
+                        const [lat, lng] = formData.locationCoordinates
+                        const polygon = createPolygonFromCoordinates(lat, lng, newRadius)
+                        updateFormData({ affectedArea: polygon })
+                      }
+                    }}
+                    placeholder="e.g., 5"
+                    min="1"
+                    required
                   />
-                </div>
-
-                <div className="bg-gray-100 rounded-lg p-4">
-                  <h3 className="text-sm font-medium text-gray-900 mb-2">
-                    Interactive Map
-                  </h3>
-                  <p className="text-sm text-gray-600">
-                    Map integration will be added here to allow drawing the affected area polygon.
+                  <p className="text-xs text-gray-500 mt-1">
+                    The radius defines the area around your location that will be shown on the map.
                   </p>
                 </div>
+
+                {formData.locationCoordinates && (
+                  <div className="bg-gray-100 rounded-lg p-4">
+                    <h3 className="text-sm font-medium text-gray-900 mb-2">
+                      Location Preview
+                    </h3>
+                    <div className="w-full h-64 rounded-lg overflow-hidden border-2 border-gray-300">
+                      <iframe
+                        width="100%"
+                        height="100%"
+                        frameBorder="0"
+                        style={{ border: 0 }}
+                        src={`https://www.openstreetmap.org/export/embed.html?bbox=${formData.locationCoordinates[1] - 0.1},${formData.locationCoordinates[0] - 0.1},${formData.locationCoordinates[1] + 0.1},${formData.locationCoordinates[0] + 0.1}&layer=mapnik&marker=${formData.locationCoordinates[0]},${formData.locationCoordinates[1]}`}
+                        allowFullScreen
+                      />
+                    </div>
+                    <p className="text-xs text-gray-600 mt-2 text-center">
+                      <a
+                        href={`https://www.openstreetmap.org/?mlat=${formData.locationCoordinates[0]}&mlon=${formData.locationCoordinates[1]}&zoom=12`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline"
+                      >
+                        View larger map
+                      </a>
+                    </p>
+                  </div>
+                )}
+
+                {!formData.locationCoordinates && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                    <p className="text-sm text-yellow-800 flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4" />
+                      Please search for and select a location to continue.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 

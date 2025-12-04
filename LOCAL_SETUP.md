@@ -15,6 +15,9 @@
    # OAuth Providers
    GOOGLE_CLIENT_ID="your-google-client-id"
    GOOGLE_CLIENT_SECRET="your-google-client-secret"
+   
+   # Admin Configuration
+   ADMIN_EMAILS="admin@example.com,another-admin@example.com"
    ```
 
 2. **Generate Prisma Client** (if not already done):

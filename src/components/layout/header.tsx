@@ -13,7 +13,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Menu, X, MapPin, Users, Heart, Plus, ArrowLeft } from 'lucide-react'
+import { Menu, X, MapPin, Users, Heart, Plus, ArrowLeft, Shield } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Breadcrumbs } from '@/components/layout/breadcrumbs'
 
@@ -170,6 +170,17 @@ export function Header() {
                     <DropdownMenuItem asChild>
                       <Link href="/settings">Settings</Link>
                     </DropdownMenuItem>
+                    {session.user?.isAdmin && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem asChild>
+                          <Link href="/admin/efforts">
+                            <Shield className="w-4 h-4 mr-2" />
+                            Admin - Approve Efforts
+                          </Link>
+                        </DropdownMenuItem>
+                      </>
+                    )}
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={() => signOut()}>
                       Sign out
@@ -179,10 +190,31 @@ export function Header() {
               </div>
             ) : (
               <div className="flex items-center space-x-2">
-                <Button variant="ghost" onClick={() => signIn()}>
+                <Button 
+                  variant="ghost" 
+                  onClick={(e) => {
+                    e.preventDefault()
+                    try {
+                      signIn(undefined, { callbackUrl: '/dashboard' })
+                    } catch (error) {
+                      console.error('Sign in error:', error)
+                      router.push('/auth/signin')
+                    }
+                  }}
+                >
                   Sign In
                 </Button>
-                <Button onClick={() => signIn()}>
+                <Button 
+                  onClick={(e) => {
+                    e.preventDefault()
+                    try {
+                      signIn(undefined, { callbackUrl: '/dashboard' })
+                    } catch (error) {
+                      console.error('Sign in error:', error)
+                      router.push('/auth/signin')
+                    }
+                  }}
+                >
                   Get Started
                 </Button>
               </div>

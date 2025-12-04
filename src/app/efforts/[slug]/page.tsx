@@ -1,43 +1,77 @@
 import { notFound } from 'next/navigation';
 import { EffortSubnav } from '@/components/efforts/effort-subnav'
+import { EffortLocation } from '@/components/efforts/effort-location'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Users, Package, Heart, HelpCircle, Camera, CheckCircle, Clock } from 'lucide-react'
+import { db } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
+// Direct database query - more efficient than HTTP request
 async function getEffort(slug: string) {
-  const res = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/efforts?slug=${encodeURIComponent(slug)}`);
-  const data = await res.json();
-  if (!data.success || !data.data || data.data.length < 1) return null;
-  return data.data[0];
+  try {
+    const effort = await db.effort.findUnique({
+      where: { slug },
+      include: {
+        organizer: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        },
+        _count: {
+          select: {
+            helpRequests: true,
+            volunteers: true,
+            donations: true,
+            resources: true
+          }
+        }
+      }
+    });
+    
+    return effort;
+  } catch (error) {
+    console.error('Error fetching effort from database:', error);
+    return null;
+  }
 }
 
-async function getEffortStats(slug: string) {
+// Direct database queries - much faster and more reliable
+async function getEffortStats(effortId: string) {
   try {
-    const [volunteersRes, resourcesRes, donationsRes, helpRequestsRes, mediaRes] = await Promise.all([
-      fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/efforts/${slug}/volunteers`),
-      fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/efforts/${slug}/resources`),
-      fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/efforts/${slug}/donations`),
-      fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/help-requests?effortId=${slug}`),
-      fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/efforts/${slug}/media`)
-    ]);
-
     const [volunteers, resources, donations, helpRequests, media] = await Promise.all([
-      volunteersRes.json().then(data => data.volunteers || []),
-      resourcesRes.json().then(data => data.resources || []),
-      donationsRes.json().then(data => data.donations || []),
-      helpRequestsRes.json().then(data => data.data || []),
-      mediaRes.json().then(data => data.data || [])
+      db.volunteer.findMany({
+        where: { effortId },
+        select: { id: true, status: true }
+      }),
+      db.resource.findMany({
+        where: { effortId },
+        select: { id: true }
+      }),
+      db.donation.findMany({
+        where: { effortId },
+        select: { id: true, amount: true }
+      }),
+      db.helpRequest.findMany({
+        where: { effortId },
+        select: { id: true }
+      }),
+      db.media.findMany({
+        where: { effortId },
+        select: { id: true }
+      })
     ]);
 
     return {
       totalVolunteers: volunteers.length,
-      activeVolunteers: volunteers.filter((v: any) => v.status === 'ACTIVE').length,
+      activeVolunteers: volunteers.filter(v => v.status === 'ACTIVE').length,
       totalResources: resources.length,
       totalDonations: donations.length,
       totalHelpRequests: helpRequests.length,
       totalMedia: media.length,
-      totalDonationValue: donations.reduce((sum: number, d: any) => sum + (d.amount || 0), 0)
+      totalDonationValue: donations.reduce((sum, d) => sum + (d.amount || 0), 0)
     };
   } catch (error) {
     console.error('Error fetching effort stats:', error);
@@ -53,14 +87,16 @@ async function getEffortStats(slug: string) {
   }
 }
 
-export default async function EffortDetailPage({ params }: { params: { slug: string } }) {
-  const effort = await getEffort(params.slug);
+export default async function EffortDetailPage({ params }: { params: Promise<{ slug: string }> }) {
+  // Next.js 14+ requires awaiting params
+  const { slug } = await params;
+  
+  const effort = await getEffort(slug);
   if (!effort) {
     notFound();
-    return null;
   }
 
-  const stats = await getEffortStats(params.slug);
+  const stats = await getEffortStats(effort.id);
 
   return (
     <div className="max-w-6xl mx-auto p-8">
@@ -187,6 +223,12 @@ export default async function EffortDetailPage({ params }: { params: { slug: str
           </CardContent>
         </Card>
       </div>
+
+      {/* Location Section */}
+      <EffortLocation 
+        affectedArea={effort.affectedArea} 
+        organizationName={effort.organizationName}
+      />
 
       
     </div>
