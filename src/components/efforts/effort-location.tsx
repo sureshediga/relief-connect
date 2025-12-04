@@ -30,7 +30,7 @@ export function EffortLocation({ affectedArea, organizationName }: EffortLocatio
       } else if (affectedArea.type === 'Polygon') {
         const ring = (affectedArea.coordinates as number[][][])[0]
         if (ring && Array.isArray(ring) && ring.length > 0) {
-          const validCoords = ring.filter((coord: any) => 
+          const validCoords: [number, number][] = ring.filter((coord: any): coord is [number, number] => 
             Array.isArray(coord) && coord.length >= 2 && 
             typeof coord[0] === 'number' && typeof coord[1] === 'number'
           )
@@ -41,7 +41,7 @@ export function EffortLocation({ affectedArea, organizationName }: EffortLocatio
                 acc[0] + coord[1], // sum of lats
                 acc[1] + coord[0], // sum of lngs
               ],
-              [0, 0]
+              [0, 0] as [number, number]
             )
             coords = [
               sum[0] / validCoords.length, // lat
